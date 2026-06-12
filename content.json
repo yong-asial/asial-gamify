@@ -1,6 +1,6 @@
 {
-  "title": "Asial World",
-  "intro": "Use Arrow keys / WASD to walk, or click the ground to move. Walk up to a building and press E (or click it) to explore. Press Esc to close a panel.",
+  "title": "Asial World — Tokyo",
+  "intro": "Explore a neon Tokyo: walk past skyscrapers, Tokyo Tower, pagodas and sakura. Use Arrow keys / WASD or click the ground to move. Walk up to a landmark and press E (or click it) to explore. Press Esc to close a panel.",
   "world": { "w": 2800, "h": 2000 },
   "spawn": { "x": 1400, "y": 1000 },
   "pois": [

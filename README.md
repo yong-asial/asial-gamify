@@ -10,6 +10,7 @@ Built with **vanilla Canvas** — no build step, no dependencies.
 - **Move:** Arrow keys / WASD, or **click the ground** to walk there
 - **Explore:** walk up to a building and press **E** (or click the building)
 - **Read:** `Space` / `→` next page, `←` previous, `Esc` to close
+- **Sound:** `M` (or the 🔊 button) to mute/unmute
 
 ## Run it
 

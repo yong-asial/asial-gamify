@@ -10,6 +10,58 @@
   const mini = document.getElementById("minimap");
   const mctx = mini.getContext("2d");
 
+  // ---- Sound (Web Audio, synthesized, deliberately quiet) ----
+  const Sound = {
+    ctx: null, master: null, on: true, _last: {},
+    init() {
+      if (this.ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.1; // low master volume
+      this.master.connect(this.ctx.destination);
+    },
+    resume() { if (this.ctx && this.ctx.state === "suspended") this.ctx.resume(); },
+    setOn(v) { this.on = v; if (this.master) this.master.gain.value = v ? 0.1 : 0; },
+    _cool(key, ms) {
+      if (!this.ctx) return false;
+      const t = this.ctx.currentTime * 1000;
+      if (this._last[key] && t - this._last[key] < ms) return false;
+      this._last[key] = t; return true;
+    },
+    tone({ freq = 440, freq2 = null, type = "sine", dur = 0.1, vol = 0.5, attack = 0.005 }) {
+      if (!this.ctx || !this.on) return;
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      const now = this.ctx.currentTime;
+      o.type = type;
+      o.frequency.setValueAtTime(freq, now);
+      if (freq2) o.frequency.exponentialRampToValueAtTime(freq2, now + dur);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.linearRampToValueAtTime(vol, now + attack);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      o.connect(g); g.connect(this.master);
+      o.start(now); o.stop(now + dur + 0.02);
+    },
+    noise({ dur = 0.1, vol = 0.4, type = "lowpass", freq = 800, q = 1 }) {
+      if (!this.ctx || !this.on) return;
+      const n = Math.floor(this.ctx.sampleRate * dur);
+      const buf = this.ctx.createBuffer(1, n, this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+      const src = this.ctx.createBufferSource(); src.buffer = buf;
+      const f = this.ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+      const g = this.ctx.createGain(); g.gain.value = vol;
+      src.connect(f); f.connect(g); g.connect(this.master); src.start();
+    },
+    _step: 0,
+    footstep() { if (!this._cool("foot", 140)) return; this._step ^= 1; this.noise({ dur: 0.07, vol: 0.16, type: "lowpass", freq: this._step ? 430 : 330, q: 0.8 }); },
+    bump() { if (!this._cool("bump", 220)) return; this.tone({ freq: 150, freq2: 70, dur: 0.14, vol: 0.32 }); this.noise({ dur: 0.08, vol: 0.13, type: "lowpass", freq: 220 }); },
+    rustle() { if (!this._cool("rustle", 260)) return; this.noise({ dur: 0.12, vol: 0.09, type: "highpass", freq: 2600, q: 0.6 }); },
+    chime() { if (!this._cool("chime", 200)) return; this.tone({ freq: 660, dur: 0.12, vol: 0.26 }); this.tone({ freq: 990, dur: 0.22, vol: 0.2, attack: 0.012 }); },
+    confirm() { this.tone({ freq: 520, freq2: 784, type: "triangle", dur: 0.18, vol: 0.28 }); },
+  };
+
   // ---- State ----
   const state = {
     world: { w: 2800, h: 2000 },
@@ -29,6 +81,7 @@
     panelOpen: false,
     dpr: Math.min(window.devicePixelRatio || 1, 2),
     t: 0,
+    footT: 0,
   };
 
   // ---- Sizing ----
@@ -88,6 +141,7 @@
       return;
     }
     if (e.code === "KeyE" && state.nearPoi) openPanel(state.nearPoi);
+    if (e.code === "KeyM") toggleMute();
     if (e.code === "Escape" && !state.running) {} // ignore on start screen
   });
   addEventListener("keyup", (e) => {
@@ -138,6 +192,20 @@
     return x >= p.x - pad && x <= p.x + p.w + pad &&
            y >= p.y - pad && y <= p.y + p.h + pad;
   }
+  // base footprint (world coords) for solid scenery; null = walk-through
+  function scenerySolid(b) {
+    const s = b.s || 1;
+    switch (b.type) {
+      case "house": return { x: b.x - 32 * s, y: b.y - 14 * s, w: 64 * s, h: 18 * s };
+      case "city": { const w = b.w * s; return { x: b.x - w / 2, y: b.y - 12, w, h: 16 }; }
+      case "pagoda": return { x: b.x - 18 * s, y: b.y - 10 * s, w: 36 * s, h: 14 * s };
+      case "tokyoTower": return { x: b.x - 30 * s, y: b.y - 8, w: 60 * s, h: 12 };
+      case "skytree": return { x: b.x - 14 * s, y: b.y - 8, w: 28 * s, h: 12 };
+      case "ferris": return { x: b.x - 22 * s, y: b.y - 8, w: 44 * s, h: 12 };
+      default: return null;
+    }
+  }
+
   // resolve circle-vs-rect: push player out of building footprint
   function collide(px, py, r, p) {
     const cx = Math.max(p.x, Math.min(px, p.x + p.w));
@@ -377,6 +445,12 @@
 
     if (dx) p.face = dx < 0 ? -1 : 1;
 
+    // footstep cadence while moving
+    if (dx || dy) {
+      state.footT += dt;
+      if (state.footT >= 0.3) { state.footT = 0; Sound.footstep(); }
+    } else { state.footT = 0.3; }
+
     let nx = p.x + dx * p.speed * dt;
     let ny = p.y + dy * p.speed * dt;
 
@@ -384,19 +458,34 @@
     nx = Math.max(p.r, Math.min(state.world.w - p.r, nx));
     ny = Math.max(p.r, Math.min(state.world.h - p.r, ny));
 
-    // building collisions
+    // building (POI) collisions
     for (const poi of state.pois) {
       const fixed = collide(nx, ny, p.r, poi);
-      if (fixed) { nx = fixed.x; ny = fixed.y; }
+      if (fixed) { nx = fixed.x; ny = fixed.y; Sound.bump(); }
     }
     p.x = nx; p.y = ny;
 
-    // nearest interactable POI
+    // scenery: solid landmarks block (thud); foliage just rustles
+    for (const b of state.billboards) {
+      const ddx = b.x - p.x, ddy = b.y - p.y;
+      if (ddx * ddx + ddy * ddy > 90000) continue; // skip far (~300px)
+      const rect = scenerySolid(b);
+      if (rect) {
+        const fixed = collide(p.x, p.y, p.r, rect);
+        if (fixed) { p.x = fixed.x; p.y = fixed.y; Sound.bump(); }
+      } else if (b.type === "tree" || b.type === "sakura" || b.type === "pine" || b.type === "bush") {
+        const rr = (b.type === "bush" ? 16 : 26) * (b.s || 1) + p.r * 0.5;
+        if (ddx * ddx + ddy * ddy < rr * rr) Sound.rustle();
+      }
+    }
+
+    // nearest interactable POI (chime when you first meet one)
     let near = null, best = Infinity;
     for (const poi of state.pois) {
       const d = dist(p, poiCenter(poi));
       if (d < interactRange(poi) && d < best) { best = d; near = poi; }
     }
+    if (near && near !== state.nearPoi) Sound.chime();
     state.nearPoi = near;
     const promptEl = document.getElementById("prompt");
     promptEl.classList.toggle("hidden", !near || state.panelOpen);
@@ -622,47 +711,214 @@
       case "city": {
         const w = b.w * s, h = b.h * s;
         shadow(x, y, w * 0.55, 10);
-        // body
-        const bg = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
-        bg.addColorStop(0, b.color);
-        bg.addColorStop(1, "rgba(0,0,0,0.35)");
+        // body (dark night tower)
         ctx.fillStyle = b.color;
         ctx.fillRect(x - w / 2, y - h, w, h);
-        ctx.fillStyle = "rgba(0,0,0,0.25)";
-        ctx.fillRect(x + w / 2 - w * 0.28, y - h, w * 0.28, h);
-        // window grid (some lit)
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        ctx.fillRect(x + w / 2 - w * 0.3, y - h, w * 0.3, h);
+        ctx.fillStyle = "rgba(255,255,255,0.04)";
+        ctx.fillRect(x - w / 2, y - h, w * 0.16, h);
+        // window grid (some lit warm/neon)
         const cols = Math.max(2, Math.floor(w / 14));
         const rows = Math.max(3, Math.floor(h / 20));
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
-            const lit = ((r * 7 + c * 3 + (b.r * 100 | 0)) % 5) === 0;
-            ctx.fillStyle = lit ? b.lit : "rgba(255,255,255,0.06)";
-            ctx.globalAlpha = lit ? 0.85 : 1;
+            const k = (r * 7 + c * 3 + (b.r * 100 | 0)) % 6;
+            if (k === 0) { ctx.globalAlpha = 0.9; ctx.fillStyle = "#fde68a"; }
+            else if (k === 1) { ctx.globalAlpha = 0.7; ctx.fillStyle = b.lit; }
+            else { ctx.globalAlpha = 1; ctx.fillStyle = "rgba(255,255,255,0.05)"; }
             ctx.fillRect(x - w / 2 + 6 + c * 12, y - h + 8 + r * 16, 6, 9);
           }
         }
         ctx.globalAlpha = 1;
-        // rooftop antenna light
-        ctx.fillStyle = b.lit;
+        // vertical neon signboard (kanji-style ticks) running down one side
+        if (b.signOn) {
+          const sx = x + b.signSide * (w / 2 - 5);
+          const sTop = y - h + 14, sH = h * b.signLen;
+          ctx.globalCompositeOperation = "lighter";
+          ctx.fillStyle = b.sign;
+          ctx.globalAlpha = 0.18;
+          ctx.fillRect(sx - 9, sTop - 4, 18, sH + 8); // glow halo
+          ctx.globalAlpha = 1;
+          ctx.globalCompositeOperation = "source-over";
+          ctx.fillStyle = "rgba(0,0,0,0.55)";
+          ctx.fillRect(sx - 7, sTop, 14, sH);
+          ctx.fillStyle = b.sign;
+          const chars = Math.max(2, Math.floor(sH / 16));
+          for (let i = 0; i < chars; i++) {
+            const cyc = 0.55 + 0.45 * Math.sin(state.t * 5 + i + b.r * 8);
+            ctx.globalAlpha = cyc;
+            ctx.fillRect(sx - 5, sTop + 4 + i * (sH / chars), 10, sH / chars - 6);
+          }
+          ctx.globalAlpha = 1;
+        }
+        // rooftop beacon
+        ctx.fillStyle = "#f87171";
         ctx.globalAlpha = 0.5 + 0.5 * Math.sin(state.t * 4 + b.r * 9);
         ctx.beginPath(); ctx.arc(x, y - h - 3, 2.5, 0, Math.PI * 2); ctx.fill();
         ctx.globalAlpha = 1;
         break;
       }
-      case "lamp": {
-        ctx.fillStyle = "#334155";
-        ctx.fillRect(x - 2, y - 34 * s, 4, 34 * s);
-        const pulse = 0.6 + 0.4 * Math.sin(state.t * 3 + b.r * 6);
-        // glow
+      case "sakura": {
+        shadow(x, y, 22 * s, 8 * s);
+        ctx.fillStyle = "#6b4423";
+        ctx.fillRect(x - 5 * s, y - 30 * s, 10 * s, 30 * s);
+        const blossom = ["#ffc0d4", "#ffb3cc", "#ffd7e6", "#ff9ec0"];
+        const puffs = [[0, -44, 26], [-14, -36, 16], [15, -38, 17], [6, -52, 13], [-8, -52, 12]];
+        for (let i = 0; i < puffs.length; i++) {
+          ctx.fillStyle = blossom[(i + (b.r * 4 | 0)) % blossom.length];
+          ctx.beginPath();
+          ctx.arc(x + puffs[i][0] * s, y + puffs[i][1] * s, puffs[i][2] * s, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        ctx.beginPath(); ctx.arc(x + 6 * s, y - 54 * s, 7 * s, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+      case "lantern": {
+        ctx.fillStyle = "#3a2a1a";
+        ctx.fillRect(x - 2, y - 40 * s, 4, 40 * s);
+        ctx.fillStyle = "#1f2937";
+        ctx.fillRect(x - 10, y - 44 * s, 20, 4); // top bar
+        const pulse = 0.7 + 0.3 * Math.sin(state.t * 2.5 + b.r * 6);
         ctx.globalCompositeOperation = "lighter";
-        const gg = ctx.createRadialGradient(x, y - 36 * s, 0, x, y - 36 * s, 26 * pulse);
-        gg.addColorStop(0, "rgba(253,224,138,0.7)");
-        gg.addColorStop(1, "rgba(253,224,138,0)");
+        const gg = ctx.createRadialGradient(x, y - 30 * s, 0, x, y - 30 * s, 30 * pulse);
+        gg.addColorStop(0, "rgba(248,113,113,0.7)");
+        gg.addColorStop(1, "rgba(248,113,113,0)");
         ctx.fillStyle = gg;
-        ctx.fillRect(x - 30, y - 36 * s - 30, 60, 60);
+        ctx.fillRect(x - 34, y - 30 * s - 34, 68, 68);
         ctx.globalCompositeOperation = "source-over";
+        // paper lantern body
+        ctx.fillStyle = "#dc2626";
+        ctx.beginPath(); ctx.ellipse(x, y - 28 * s, 12 * s, 16 * s, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,0.25)"; ctx.lineWidth = 1.5;
+        for (let i = -1; i <= 1; i++) {
+          ctx.beginPath(); ctx.ellipse(x, y - 28 * s, 12 * s, 16 * s - Math.abs(i) * 5, 0, 0, Math.PI * 2);
+          ctx.moveTo(x - 12 * s, y - 28 * s + i * 8); ctx.lineTo(x + 12 * s, y - 28 * s + i * 8);
+        }
+        ctx.beginPath(); ctx.moveTo(x - 12 * s, y - 30 * s); ctx.lineTo(x + 12 * s, y - 30 * s); ctx.stroke();
+        ctx.fillStyle = "#1f2937"; ctx.fillRect(x - 4, y - 14 * s, 8, 4);
+        break;
+      }
+      case "tokyoTower": {
+        const h = 200 * s, hw = 42 * s;
+        shadow(x, y, hw * 0.7, 9);
+        ctx.strokeStyle = "#e53e3e"; ctx.lineWidth = 4 * s;
+        // legs
+        ctx.beginPath();
+        ctx.moveTo(x - hw, y); ctx.lineTo(x - 6 * s, y - h);
+        ctx.moveTo(x + hw, y); ctx.lineTo(x + 6 * s, y - h);
+        ctx.moveTo(x - hw, y); ctx.lineTo(x + hw * 0.5, y - h * 0.55);
+        ctx.moveTo(x + hw, y); ctx.lineTo(x - hw * 0.5, y - h * 0.55);
+        ctx.stroke();
+        // cross-bracing bands
+        ctx.lineWidth = 2 * s; ctx.strokeStyle = "#fff";
+        for (let i = 1; i < 6; i++) {
+          const yy = y - (h * i) / 6;
+          const ww = hw * (1 - i / 6.5);
+          ctx.beginPath(); ctx.moveTo(x - ww, yy); ctx.lineTo(x + ww, yy); ctx.stroke();
+        }
+        // platform deck
+        ctx.fillStyle = "#e53e3e"; ctx.fillRect(x - hw * 0.7, y - h * 0.62, hw * 1.4, 10 * s);
+        // mast + beacon
+        ctx.strokeStyle = "#e53e3e"; ctx.lineWidth = 4 * s;
+        ctx.beginPath(); ctx.moveTo(x, y - h); ctx.lineTo(x, y - h - 26 * s); ctx.stroke();
         ctx.fillStyle = "#fde68a";
-        ctx.beginPath(); ctx.arc(x, y - 36 * s, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 0.5 + 0.5 * Math.sin(state.t * 4);
+        ctx.beginPath(); ctx.arc(x, y - h - 28 * s, 3.5, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case "skytree": {
+        const h = 240 * s;
+        shadow(x, y, 16 * s, 7);
+        const g2 = ctx.createLinearGradient(x, y, x, y - h);
+        g2.addColorStop(0, "#7dd3fc"); g2.addColorStop(1, "#c7d2fe");
+        ctx.strokeStyle = g2; ctx.lineWidth = 3 * s;
+        // two tapering edges
+        ctx.beginPath();
+        ctx.moveTo(x - 16 * s, y); ctx.quadraticCurveTo(x - 4 * s, y - h * 0.6, x - 4 * s, y - h);
+        ctx.moveTo(x + 16 * s, y); ctx.quadraticCurveTo(x + 4 * s, y - h * 0.6, x + 4 * s, y - h);
+        ctx.stroke();
+        // lattice rings
+        ctx.lineWidth = 1.5 * s; ctx.strokeStyle = "rgba(199,210,254,0.7)";
+        for (let i = 1; i < 9; i++) {
+          const yy = y - (h * i) / 9;
+          const ww = 16 * s * (1 - i / 10);
+          ctx.beginPath(); ctx.moveTo(x - ww, yy); ctx.lineTo(x + ww, yy); ctx.stroke();
+        }
+        // observation bulbs
+        ctx.fillStyle = "rgba(125,211,252,0.5)";
+        ctx.beginPath(); ctx.ellipse(x, y - h * 0.55, 9 * s, 7 * s, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(x, y - h * 0.78, 7 * s, 5 * s, 0, 0, Math.PI * 2); ctx.fill();
+        // mast beacon
+        ctx.fillStyle = "#a5f3fc";
+        ctx.globalAlpha = 0.5 + 0.5 * Math.sin(state.t * 3 + 1);
+        ctx.beginPath(); ctx.arc(x, y - h, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case "pagoda": {
+        const tiers = 5, th = 22 * s;
+        shadow(x, y, 30 * s, 9 * s);
+        ctx.fillStyle = "#7f1d1d"; ctx.fillRect(x - 8 * s, y - th, 16 * s, th); // base body
+        for (let i = 0; i < tiers; i++) {
+          const ty = y - th - i * (th * 0.78);
+          const ww = (34 - i * 5) * s;
+          // roof
+          ctx.fillStyle = "#3f2d2d";
+          ctx.beginPath();
+          ctx.moveTo(x - ww, ty);
+          ctx.quadraticCurveTo(x - ww * 0.4, ty - 12 * s, x, ty - 13 * s);
+          ctx.quadraticCurveTo(x + ww * 0.4, ty - 12 * s, x + ww, ty);
+          ctx.quadraticCurveTo(x, ty - 3 * s, x - ww, ty);
+          ctx.closePath(); ctx.fill();
+          // wall
+          ctx.fillStyle = "#9b2c2c";
+          const wallW = ww * 0.5;
+          ctx.fillRect(x - wallW, ty, wallW * 2, th * 0.7);
+        }
+        // finial
+        ctx.strokeStyle = "#d4af37"; ctx.lineWidth = 2.5 * s;
+        const topY = y - th - (tiers - 1) * (th * 0.78) - 13 * s;
+        ctx.beginPath(); ctx.moveTo(x, topY); ctx.lineTo(x, topY - 16 * s); ctx.stroke();
+        break;
+      }
+      case "ferris": {
+        const R = 56 * s, cyW = y - R - 14 * s;
+        shadow(x, y, 30 * s, 9 * s);
+        // support legs
+        ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 4 * s;
+        ctx.beginPath();
+        ctx.moveTo(x - 22 * s, y); ctx.lineTo(x, cyW);
+        ctx.moveTo(x + 22 * s, y); ctx.lineTo(x, cyW);
+        ctx.stroke();
+        // wheel
+        ctx.strokeStyle = "#cbd5e1"; ctx.lineWidth = 3 * s;
+        ctx.beginPath(); ctx.arc(x, cyW, R, 0, Math.PI * 2); ctx.stroke();
+        // spokes + cabins (rotating, lit)
+        const spokes = 12;
+        for (let i = 0; i < spokes; i++) {
+          const a = state.t * 0.3 + (i * Math.PI * 2) / spokes;
+          const px = x + Math.cos(a) * R, py = cyW + Math.sin(a) * R;
+          ctx.strokeStyle = "rgba(203,213,225,0.6)"; ctx.lineWidth = 1.5 * s;
+          ctx.beginPath(); ctx.moveTo(x, cyW); ctx.lineTo(px, py); ctx.stroke();
+          ctx.fillStyle = ["#ff2d78", "#22d3ee", "#facc15", "#a855f7"][i % 4];
+          ctx.beginPath(); ctx.arc(px, py, 5 * s, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = "#e2e8f0";
+        ctx.beginPath(); ctx.arc(x, cyW, 5 * s, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+      case "torii": {
+        const h = 70 * s, hw = 34 * s;
+        shadow(x, y, hw * 0.8, 7 * s);
+        ctx.fillStyle = "#d64545";
+        ctx.fillRect(x - hw + 6 * s, y - h, 8 * s, h);
+        ctx.fillRect(x + hw - 14 * s, y - h, 8 * s, h);
+        ctx.fillStyle = "#7a1f1f"; ctx.fillRect(x - hw - 4 * s, y - h - 6 * s, hw * 2 + 8 * s, 7 * s);
+        ctx.fillStyle = "#d64545"; ctx.fillRect(x - hw, y - h - 1 * s, hw * 2, 8 * s);
+        ctx.fillStyle = "#b83535"; ctx.fillRect(x - hw + 10 * s, y - h + 16 * s, hw * 2 - 20 * s, 6 * s);
         break;
       }
       case "portal": {
@@ -973,6 +1229,7 @@
     state.panelOpen = true;
     state.keys.clear();
     state.moveTarget = null;
+    Sound.confirm();
     document.getElementById("panel-icon").textContent = poi.icon || "?";
     document.getElementById("panel-icon").style.background = hexToRgba(poi.color, 0.25);
     document.getElementById("panel-title").textContent = poi.title;
@@ -1012,7 +1269,19 @@
   document.getElementById("start-btn").onclick = () => {
     document.getElementById("start").classList.add("hidden");
     state.running = true;
+    Sound.init();
+    Sound.resume();
+    Sound.confirm();
   };
+
+  // mute toggle (M key or HUD button)
+  function toggleMute() {
+    Sound.setOn(!Sound.on);
+    const btn = document.getElementById("mute");
+    if (btn) btn.textContent = Sound.on ? "🔊" : "🔇";
+  }
+  const muteBtn = document.getElementById("mute");
+  if (muteBtn) muteBtn.onclick = toggleMute;
 
   // ---- Service worker (PWA) ----
   if ("serviceWorker" in navigator) {

@@ -1,5 +1,5 @@
 /* Simple cache-first service worker for offline PWA support. */
-const CACHE = "asial-world-v3";
+const CACHE = "asial-world-v5";
 const ASSETS = [
   "./",
   "./index.html",
