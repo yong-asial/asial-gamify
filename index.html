@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Asial World — Explore</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div id="hint">Arrows / WASD or click to move</div>
+    <div id="prompt" class="hidden">Press <kbd>E</kbd> or click to explore</div>
+  </div>
+
+  <!-- Minimap -->
+  <canvas id="minimap"></canvas>
+
+  <!-- Start screen -->
+  <div id="start" class="overlay">
+    <div class="card">
+      <h1>Asial World</h1>
+      <p id="start-intro">Loading…</p>
+      <ul class="controls">
+        <li><b>Move:</b> Arrow keys / WASD, or click the ground</li>
+        <li><b>Explore:</b> walk up to a building &amp; press <kbd>E</kbd> (or click it)</li>
+        <li><b>Read:</b> <kbd>Space</kbd> / <kbd>→</kbd> next, <kbd>Esc</kbd> close</li>
+      </ul>
+      <button id="start-btn">▶ Start walking</button>
+    </div>
+  </div>
+
+  <!-- Info panel -->
+  <div id="panel" class="overlay hidden">
+    <div class="card panel-card">
+      <div class="panel-head">
+        <span id="panel-icon" class="panel-icon"></span>
+        <h2 id="panel-title"></h2>
+        <button id="panel-close" aria-label="Close">✕</button>
+      </div>
+      <p id="panel-body"></p>
+      <div class="panel-foot">
+        <button id="panel-prev">‹ Prev</button>
+        <span id="panel-progress"></span>
+        <button id="panel-next">Next ›</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

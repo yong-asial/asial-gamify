@@ -1,0 +1,130 @@
+{
+  "title": "Asial World",
+  "intro": "Use Arrow keys / WASD to walk, or click the ground to move. Walk up to a building and press E (or click it) to explore. Press Esc to close a panel.",
+  "world": { "w": 2800, "h": 2000 },
+  "spawn": { "x": 1400, "y": 1000 },
+  "pois": [
+    {
+      "id": "welcome",
+      "kind": "torii",
+      "title": "Welcome to Asial",
+      "color": "#2dd4bf",
+      "icon": "★",
+      "x": 1000, "y": 700, "w": 200, "h": 140,
+      "pages": [
+        "Asial Corporation — a Tokyo-based technology company founded in 2002.",
+        "Led by Representative Director Masahiro Tanaka (田中正裕).",
+        "Brands itself as a \"Digital Empowerment Company\": using IT to make people and society more prosperous — from backend systems to frontend and UI/UX design.",
+        "Walk around and visit each building to explore. Try the Solutions plaza, the Products lab, the Track Record gallery, Company info, and Careers."
+      ]
+    },
+    {
+      "id": "strengths",
+      "kind": "trophy",
+      "title": "Why Choose Us (選ばれる理由)",
+      "color": "#f59e0b",
+      "icon": "⚑",
+      "x": 360, "y": 360, "w": 220, "h": 150,
+      "pages": [
+        "A full-stack specialist team.",
+        "Members hold the complete skill set — from requirements definition through UI/UX design.",
+        "This lets complex client challenges be solved in a single engagement, and high-value proprietary products to be built in-house."
+      ]
+    },
+    {
+      "id": "solutions",
+      "kind": "gears",
+      "title": "Solutions (ソリューション)",
+      "color": "#60a5fa",
+      "icon": "⚙",
+      "x": 760, "y": 360, "w": 240, "h": 150,
+      "pages": [
+        "8 service areas:",
+        "1. System Consulting — 20+ years of development expertise across industries.",
+        "2. DX / In-house Development Support — hands-on technical guidance to promote DX.",
+        "3. System Construction & App Development — web and mobile apps with modern tech.",
+        "4. AI System Development & R&D — data analysis, PoC, and AI-integrated UI/UX.",
+        "5. UX/UI Design — multi-platform design, designer + developer collaboration.",
+        "6. University DX Support — DX solutions for higher-education operations.",
+        "7. Information Education — promoting technology literacy since founding (2002).",
+        "8. Products — Monaca, Onsen UI, and other development tools."
+      ]
+    },
+    {
+      "id": "products",
+      "kind": "shop",
+      "title": "Products (プロダクト)",
+      "color": "#a78bfa",
+      "icon": "◈",
+      "x": 1500, "y": 360, "w": 240, "h": 150,
+      "pages": [
+        "7 products:",
+        "Monaca — cloud-based hybrid mobile app dev platform (web standards).",
+        "Monaca Education — programming education for schools (JS/Python, build real apps).",
+        "Monaca for Hybridcast — HTML5 content tooling for next-gen \"Hybridcast\" TV.",
+        "Onsen UI — open-source mobile UI framework (100+ components, React/Vue).",
+        "MyCampus — university DX app (digital student ID, attendance, campus services).",
+        "ObjectiveFS — S3-backed unlimited, NFS-compatible cloud storage.",
+        "JpGraph — PHP graphing library (20+ chart types)."
+      ]
+    },
+    {
+      "id": "works",
+      "kind": "museum",
+      "title": "Track Record (実績)",
+      "color": "#34d399",
+      "icon": "⌂",
+      "x": 1640, "y": 760, "w": 240, "h": 150,
+      "pages": [
+        "37+ client case studies across industries.",
+        "Finance: PayPay Bank (net banking app), Monex Securities, SMBC Financial Group.",
+        "Healthcare/Wellness: Suntory (gut-health app from audio analysis), Tanita (Health Planet).",
+        "Sports/Manufacturing: ASICS (shoe finder, gait analysis), Casio (Runmetrix/Walkmetrix).",
+        "Media/Entertainment: TV Asahi (「みんながカメラマン」), Sega (Puyo Puyo education).",
+        "Education/Research: Yamato University, Tokyo Univ. Kavli IPMU, Doshisha High School.",
+        "DX: Benesse i-Career (Cordova → Flutter migration), automotive CMS."
+      ]
+    },
+    {
+      "id": "company",
+      "kind": "tower",
+      "title": "Company Info (会社情報)",
+      "color": "#fb7185",
+      "icon": "▣",
+      "x": 360, "y": 1080, "w": 240, "h": 150,
+      "pages": [
+        "Founded: 2002.",
+        "Representative Director: Masahiro Tanaka (田中正裕).",
+        "An \"expert group\" using information technology to enrich people and companies.",
+        "Vision: deliver technology to people and society worldwide and contribute to creative activities."
+      ]
+    },
+    {
+      "id": "careers",
+      "kind": "briefcase",
+      "title": "Careers (採用情報)",
+      "color": "#fbbf24",
+      "icon": "☺",
+      "x": 1640, "y": 1080, "w": 240, "h": 150,
+      "pages": [
+        "Roles in Project Management, Design, and Engineering.",
+        "Individualized growth paths rather than fixed career ladders.",
+        "Emphasis on the collective capability of the workforce (「働く人の総合力」).",
+        "Resources: member interviews, tech blog, internal note publications, casual interviews."
+      ]
+    },
+    {
+      "id": "contact",
+      "kind": "postman",
+      "title": "Contact (お問い合わせ)",
+      "color": "#94a3b8",
+      "icon": "✉",
+      "x": 1000, "y": 1080, "w": 200, "h": 140,
+      "pages": [
+        "Want to work with Asial?",
+        "Visit https://www.asial.co.jp/contact/ to get in touch.",
+        "Global / English site: https://en.asial.co.jp/"
+      ]
+    }
+  ]
+}
